@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 
 from .catalog import GHOSTTY_USER_THEMES, HELIX_USER_THEMES
-from .color import CONTRAST_TARGET, TEXT_SLOTS, remediate
+from .color import CONTRAST_TARGET, TEXT_SLOTS, remediate, remediate_against
 from .targets import write
 
 # ANSI slots are kept inside the theme's own hue family so a tinted prompt
@@ -26,28 +26,35 @@ def _slots(spec: dict) -> dict[int, str]:
 
 def ghostty_theme(spec: dict) -> str:
     background = spec["bg"]
+    # Text is drawn on selections and panels, not only the base background, and
+    # correction direction follows the theme's polarity - a mid-tone selection
+    # tint on a light theme must never flip it toward white.
+    surfaces = [background, spec["bg1"], spec["bg2"]]
+    darken = spec["mode"] == "light"
     slots = _slots(spec)
     lines = []
     for index in range(16):
         color = slots[index]
         if index in TEXT_SLOTS:
-            color = remediate(color, background)
+            color = remediate_against(color, surfaces, darken=darken)
         lines.append(f"palette = {index}={color}")
     lines += [
         f"background = {background}",
-        f"foreground = {remediate(spec['fg'], background, 7.0)}",
-        f"cursor-color = {remediate(spec['a1'], background)}",
+        f"foreground = {remediate_against(spec['fg'], surfaces, 7.0, darken=darken)}",
+        f"cursor-color = {remediate(spec['a1'], background, darken=darken)}",
         f"selection-background = {spec['bg2']}",
-        f"selection-foreground = {remediate(spec['fg'], spec['bg2'])}",
+        f"selection-foreground = {remediate(spec['fg'], spec['bg2'], darken=darken)}",
     ]
     return "\n".join(lines) + "\n"
 
 
 def helix_theme(spec: dict) -> str:
     background = spec["bg"]
+    surfaces = [background, spec["bg1"], spec["bg2"]]
+    darken = spec["mode"] == "light"
 
     def fix(color: str, target: float = CONTRAST_TARGET) -> str:
-        return remediate(color, background, target)
+        return remediate_against(color, surfaces, target, darken=darken)
 
     fg = fix(spec["fg"], 7.0)
     dim = fix(spec["dim"])
@@ -121,7 +128,7 @@ def helix_theme(spec: dict) -> str:
     header = (
         f"# {spec.get('about', '')}\n"
         f"# generated - edits are overwritten by `theme generate`\n"
-        f"# colours corrected to WCAG {CONTRAST_TARGET}:1 against the background\n\n"
+        f"# colours corrected to WCAG {CONTRAST_TARGET}:1 against every surface they land on\n\n"
     )
     return header + "\n".join(f"{k} = {v}" for k, v in scopes.items()) + "\n"
 

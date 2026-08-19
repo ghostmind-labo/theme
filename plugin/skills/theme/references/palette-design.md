@@ -45,6 +45,28 @@ error is invisible as an error. Amber (`~#e6c384`) and red (`~#e05252`) work
 against nearly every palette and are safe defaults when the brief does not
 speak to them.
 
+## Hue separation is on the author
+
+Contrast correction moves lightness, never hue — so two roles that land on the
+same hue stay indistinguishable no matter how legible each one is. Before
+writing a spec, check the hue angles:
+
+- Keep `a1`, `a2`, `a3`, `warn` and `err` roughly **40° apart**. Two roles
+  within ~15° of each other (an olive `a3` at 46° next to an amber `warn` at
+  45°) make types and warnings read as the same thing.
+- Warm backgrounds are the trap: a yellow or orange field invites warm accents,
+  and three of them bunched within ~20° turn code into mush. Push at least one
+  accent to the cool side.
+
+## Sibling themes
+
+To make "the same theme in a different colour", do not eyeball new values.
+Pull the original spec (`theme edit <name>`), rotate every colour's **hue**
+while preserving its exact lightness and saturation, and keep any deliberate
+hue offsets between roles (if `a3` sits 8° off `a1`, keep it 8° off). That is
+what makes the result feel like a sibling rather than a new theme that happens
+to be a different colour.
+
 ## Worked examples
 
 **Brief: "something like an old amber terminal"**
