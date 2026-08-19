@@ -218,14 +218,22 @@ def cmd_revert(target: str, overrides: dict) -> int:
 def cmd_list(themes: dict) -> int:
     custom = load_custom()
     active = current(themes)
-    for mode in ("dark", "light"):
-        print(f"\n{mode}")
-        for key, value in themes.items():
-            if value[3] != mode:
+    sections = (
+        ("preset", [k for k in themes if k not in custom]),
+        ("custom", [k for k in themes if k in custom]),
+    )
+    for label, keys in sections:
+        if not keys:
+            continue
+        print(f"\n{label}")
+        for mode in ("dark", "light"):
+            group = [k for k in keys if themes[k][3] == mode]
+            if not group:
                 continue
-            marker = "*" if key == active else " "
-            tag = "  (custom)" if key in custom else ""
-            print(f"  {marker} {key}{tag}")
+            print(f"  {mode}")
+            for key in group:
+                marker = "*" if key == active else " "
+                print(f"    {marker} {key}")
     print(f"\ncurrent: {active}")
     return 0
 
