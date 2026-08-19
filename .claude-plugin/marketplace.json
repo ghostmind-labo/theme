@@ -1,0 +1,31 @@
+{
+  "name": "ghostmind-theme",
+  "owner": {
+    "name": "ghostmind",
+    "url": "https://github.com/ghostmind-labo"
+  },
+  "metadata": {
+    "version": "0.1.0",
+    "description": "Terminal theming for the Ghostmind stack: one command to recolour Ghostty, herdr and Helix together, with WCAG contrast enforced rather than eyeballed."
+  },
+  "plugins": [
+    {
+      "name": "theme",
+      "source": "./plugin",
+      "description": "Recolour the terminal stack \u2014 Ghostty, herdr and Helix \u2014 from one command, and author new palettes that persist. Contrast is measured and corrected rather than eyeballed.",
+      "author": {
+        "name": "ghostmind"
+      },
+      "keywords": [
+        "theme",
+        "terminal",
+        "ghostty",
+        "herdr",
+        "helix",
+        "colour",
+        "contrast",
+        "accessibility"
+      ]
+    }
+  ]
+}
