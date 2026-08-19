@@ -22,28 +22,8 @@ from .catalog import (
     GHOSTTY_USER_THEMES,
     HELIX_CONFIG,
     HERDR_CONFIG,
+    HOME,
 )
-
-# Kanagawa's dim tokens are very low contrast, which is what makes herdr's tab
-# and workspace names hard to read. These lift the muted greys toward
-# Kanagawa's own lighter palette and put a high-contrast carpYellow on the
-# accent. Every value is a real Kanagawa colour, so it stays on-theme.
-KANAGAWA_HERDR_CUSTOM = """[theme.custom]
-text = "#dcd7ba"
-subtext0 = "#c8c093"
-overlay0 = "#a6a08c"
-overlay1 = "#b8b0c8"
-surface0 = "#2a2a37"
-surface1 = "#43435a"
-accent = "#e6c384"
-blue = "#7fb4ca"
-green = "#98bb6c"
-yellow = "#e6c384"
-red = "#e82424"
-teal = "#7aa89f"
-mauve = "#957fb8"
-peach = "#ffa066"
-"""
 
 
 def read(path: str) -> str:
@@ -116,12 +96,14 @@ def set_helix(name: str) -> None:
     write(HELIX_CONFIG, text)
 
 
-def set_herdr(name: str, kanagawa_custom: bool) -> None:
-    """Rewrite herdr's [theme] name, and manage the Kanagawa contrast block.
+def set_herdr(name: str, custom_block: str | None = None) -> None:
+    """Rewrite herdr's [theme] name and its [theme.custom] override block.
 
-    Those overrides are hex values tuned to one palette, so they are written
-    only for Kanagawa and stripped when switching away - otherwise they would
-    clash with every other theme.
+    herdr draws its sidebar on its own surfaces. Left to inherit, it picks
+    pairings nothing has checked, which is how a selected workspace row ends up
+    with an unreadable subtitle. The block is regenerated per theme and always
+    replaced, never merged - a stale block from another palette is worse than
+    none.
     """
     text = read(HERDR_CONFIG)
 
@@ -132,9 +114,35 @@ def set_herdr(name: str, kanagawa_custom: bool) -> None:
     text = re.sub(r"(^\[theme\][^\n]*\n)((?:(?!^\[).*\n)*)", replace_name, text, count=1, flags=re.M)
     text = re.sub(r"^\[theme\.custom\]\n(?:(?!^\[).*\n)*", "", text, flags=re.M)
     text = text.rstrip("\n") + "\n"
-    if kanagawa_custom:
-        text += "\n" + KANAGAWA_HERDR_CUSTOM
+    if custom_block:
+        text += "\n" + custom_block
     write(HERDR_CONFIG, text)
+
+
+CLAUDE_SETTINGS = f"{HOME}/.claude/settings.json"
+
+
+def sync_claude_code(mode: str) -> bool:
+    """Match Claude Code's own theme to the terminal's light/dark mode.
+
+    Claude Code picks its syntax colours for one polarity. Under the opposite
+    one its inline code and dim text wash out - which looks like a broken
+    terminal theme but is not one. Returns True if the setting changed.
+    """
+    import json
+
+    try:
+        with open(CLAUDE_SETTINGS) as handle:
+            settings = json.load(handle)
+    except (FileNotFoundError, ValueError):
+        return False
+    if settings.get("theme") == mode:
+        return False
+    settings["theme"] = mode
+    with open(CLAUDE_SETTINGS, "w") as handle:
+        json.dump(settings, handle, indent=2)
+        handle.write("\n")
+    return True
 
 
 def reload_herdr() -> bool:
@@ -149,15 +157,22 @@ def reload_herdr() -> bool:
 
 def apply(key: str, themes: dict) -> dict:
     """Write the theme into all three configs. Returns what happened."""
+    from .herdr_theme import herdr_custom
+
     ghostty, helix, herdr, mode = themes[key]
+    palette, background, foreground = palette_of(ghostty)
+    block = herdr_custom(palette, background, foreground) if (palette and background and foreground) else None
+
     set_ghostty(ghostty)
     set_helix(helix)
-    set_herdr(herdr, kanagawa_custom=key.startswith("kanagawa"))
+    set_herdr(herdr, custom_block=block)
     return {
         "key": key,
         "mode": mode,
         "ghostty": ghostty,
         "helix": helix,
         "herdr": herdr,
+        "herdr_chrome": bool(block),
+        "claude_synced": sync_claude_code(mode),
         "herdr_reloaded": reload_herdr(),
     }

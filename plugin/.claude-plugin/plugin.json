@@ -1,7 +1,7 @@
 {
   "name": "theme",
   "description": "Manage the terminal colour scheme across Ghostty, herdr and Helix, and author new themes that persist",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": {
     "name": "ghostmind-dev"
   }

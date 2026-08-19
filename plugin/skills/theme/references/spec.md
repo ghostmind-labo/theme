@@ -82,15 +82,23 @@ deliberate.
 
 ## What correction does
 
-At write time each glyph-carrying colour is measured against `bg`. Anything
-below 4.5:1 has its lightness bisected — darker on a light background, lighter
-on a dark one — while hue and saturation are held fixed. `fg` is held to a
-stricter 7:1.
+At write time each glyph-carrying colour is measured against **every surface it
+can be drawn on** — `bg`, the panel `bg1` and the selection `bg2` — and
+corrected against the worst of them. Anything below 4.5:1 has its lightness
+bisected while hue and saturation are held fixed. `fg` is held to a stricter
+7:1.
+
+Correction direction comes from the theme's `mode`, never from an individual
+surface: a mid-tone selection tint can sit on the far side of the luminance
+midpoint from its own theme, and deciding per-surface would push text away from
+the theme entirely (on a solid-yellow light theme it once lightened failing
+colours to white).
 
 The consequence for authoring: **saturation and hue survive correction,
 lightness does not**. A spec that expresses its intent through hue and
 saturation comes out looking as intended. A spec that relies on a precise
-lightness value may be moved.
+lightness value may be moved — and since `bg2` is the harshest surface, a
+colour close to `bg2`'s lightness will be moved the furthest.
 
 ## Where things live
 

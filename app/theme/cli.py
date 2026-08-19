@@ -57,6 +57,14 @@ def _apply_and_report(key: str, themes: dict) -> None:
           + ("   (inherits ghostty)" if result["herdr"] == "terminal" else ""))
     if report:
         print(f"  contrast text {report.fg_ratio:.1f}:1, weakest colour {report.worst:.1f}:1")
+    if result.get("herdr_chrome"):
+        from .herdr_theme import check
+        from .targets import palette_of
+        pal, bg, fg = palette_of(result["ghostty"])
+        worst = min(v for _t, v in check(pal, bg, fg))
+        print(f"  sidebar  herdr chrome regenerated, weakest label {worst:.1f}:1")
+    if result.get("claude_synced"):
+        print(f"  claude   own theme switched to {result['mode']} to match")
     print()
     print("  herdr    " + ("reloaded" if result["herdr_reloaded"]
                            else "not running - picks it up on next start"))

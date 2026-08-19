@@ -51,17 +51,25 @@ def from_hls(hue: float, light: float, sat: float) -> str:
     return to_hex((r * 255, g * 255, b * 255))
 
 
-def remediate(color: str, background: str, target: float = CONTRAST_TARGET) -> str:
+def remediate(
+    color: str,
+    background: str,
+    target: float = CONTRAST_TARGET,
+    darken: bool | None = None,
+) -> str:
     """Move a colour's lightness until it clears `target` against `background`.
 
     Hue and saturation are held fixed and lightness moves only as far as it
     must, so a remediated Gruvbox still reads as Gruvbox. Direction follows the
-    background: darken on light, lighten on dark.
+    background unless `darken` overrides it - which callers must do when
+    correcting against several surfaces, because a mid-tone surface can sit on
+    the wrong side of the midpoint and flip the direction against the theme.
     """
     if contrast(color, background) >= target:
         return color
     hue, light, sat = to_hls(color)
-    darken = luminance(background) > 0.5
+    if darken is None:
+        darken = luminance(background) > 0.5
     low, high = (0.0, light) if darken else (light, 1.0)
     best = from_hls(hue, 0.0 if darken else 1.0, sat)
     # 24 rounds of bisection resolves far finer than 8-bit colour can express.
@@ -74,6 +82,32 @@ def remediate(color: str, background: str, target: float = CONTRAST_TARGET) -> s
         else:
             low, high = (low, mid) if darken else (mid, high)
     return best
+
+
+def remediate_against(
+    color: str,
+    backgrounds,
+    target: float = CONTRAST_TARGET,
+    darken: bool | None = None,
+) -> str:
+    """Clear `target` against *every* background the colour may be drawn on.
+
+    Text is not only drawn on `bg`. Panels, statuslines and selection
+    highlights use `bg1`/`bg2`, and a colour that reads well on the base can
+    disappear on a highlight - which is exactly how a selected sidebar row
+    becomes unreadable. Correcting against the single worst surface fixes all
+    of them at once.
+
+    Direction is taken from `backgrounds[0]` - the theme's own background -
+    rather than from the worst surface. A panel or selection tint can land on
+    the far side of the luminance midpoint from the theme it belongs to, and
+    deciding per-surface then drives text away from the theme entirely: on a
+    solid yellow theme it lightened every failing colour to white.
+    """
+    if darken is None:
+        darken = luminance(backgrounds[0]) > 0.5
+    worst = min(backgrounds, key=lambda b: contrast(color, b))
+    return remediate(color, worst, target, darken=darken)
 
 
 def swatch(color: str, width: int = 4) -> str:

@@ -5,7 +5,7 @@
     "url": "https://github.com/ghostmind-labo"
   },
   "metadata": {
-    "version": "0.1.0",
+    "version": "0.2.0",
     "description": "Terminal theming for the Ghostmind stack: one command to recolour Ghostty, herdr and Helix together, with WCAG contrast enforced rather than eyeballed."
   },
   "plugins": [

@@ -1,7 +1,7 @@
 ---
 name: theme
 description: This skill should be used when the user asks to "change my terminal theme", "switch to a dark/light theme", "what themes do I have", "make me a theme", "create a theme that looks like X", "build a theme from this colour", "delete that theme", or says the terminal is "hard to read", "too dim", or "low contrast". It covers driving the `theme` CLI to apply, author, audit and correct terminal colour schemes that persist across sessions.
-version: 0.1.0
+version: 0.2.0
 ---
 
 # Theme
@@ -24,6 +24,17 @@ A terminal theme is three configs that know nothing about each other:
 The CLI writes all three. The shell prompt and file manager need no
 configuration because they emit slot numbers (`\033[33m` means "paint me slot
 3") and Ghostty decides what slot 3 is.
+
+Applying a theme also does two things beyond the three configs:
+
+- **herdr's `[theme.custom]` chrome block is regenerated per theme.** herdr
+  draws its sidebar on its own surfaces; left to inherit, it picks pairings
+  nothing has checked, and a selected row's subtitle can land below 2.5:1.
+  The generated block corrects every chrome token against those surfaces.
+- **Claude Code's own theme is synced to the terminal's polarity** (the
+  `theme` key in `~/.claude/settings.json`). If a user on a light terminal
+  reports washed-out inline code or lavender-ish text in Claude Code, that is
+  a polarity mismatch, not a broken palette — re-applying the theme fixes it.
 
 **Always tell the user to press `cmd+shift+,` in Ghostty after applying.**
 herdr reloads automatically and Helix picks the theme up on next launch, but
@@ -82,14 +93,28 @@ apply it.
 
 ## Contrast is handled automatically
 
-Every generated colour is corrected to WCAG 4.5:1 against its own background at
-write time, by moving lightness while holding hue and saturation fixed.
+Every generated colour is corrected to WCAG 4.5:1 at write time, by moving
+lightness while holding hue and saturation fixed — and it is corrected against
+**every surface text lands on** (`bg`, the panel `bg1`, the selection `bg2`),
+not just the base background. A colour that reads fine on the background but
+vanishes on a selection highlight is exactly the failure this prevents.
+Correction direction always follows the theme's `mode`, never an individual
+surface's luminance.
 
-**This changes how to author.** Choose colours for *mood*, not legibility — a
-seed only has to look right, it does not have to be readable. Do not
-pre-darken accents to make them legible; that fights the corrector and produces
-muddy results. Pick the colour that expresses the brief and let correction
-handle the floor.
+**This changes how to author, differently per polarity.**
+
+- **Dark themes:** choose colours for *mood*, not legibility — a seed only has
+  to look right. Correction lifts anything that falls short without muddying
+  it.
+- **Light themes:** author the accents **dark directly**. A bright colour
+  dragged down to the floor keeps its hue but looks washed; a colour authored
+  dark keeps its saturation. Aim for every role to clear 4.5:1 before
+  correction so nothing gets moved.
+
+**Keep accent hues separated.** Correction fixes lightness, never hue — two
+roles on the same hue stay indistinguishable no matter how legible they are.
+Keep `a1`/`a2`/`a3`, `warn` and `err` roughly 40° apart on the hue wheel; on a
+warm background especially, do not let three warm accents bunch within ~20°.
 
 When the user reports a theme is hard to read:
 
@@ -128,6 +153,9 @@ and pipe it back through `theme new <name>` — that overwrites in place.
   a catalog theme is rejected; pick another rather than forcing it.
 - **Custom themes always set herdr to `terminal`**, so herdr inherits Ghostty's
   palette. This is why custom themes work at all — herdr only knows ~17 names.
+- **Never hand-edit herdr's `[theme.custom]` block.** It is generated and
+  replaced wholesale on every theme switch; a stale block from another palette
+  is worse than none.
 - **Run `theme doctor` after bulk changes** to confirm every theme still
   resolves.
 
