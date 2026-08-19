@@ -1,0 +1,71 @@
+{
+  "id": "SyI71QPDugZ4",
+  "name": "theme",
+  "version": "0.1.0",
+  "description": "TUI for switching the terminal stack's colour scheme across Ghostty, herdr and Helix, with WCAG contrast enforcement.",
+  "type": "app",
+  "tags": [
+    "cli",
+    "tui",
+    "terminal",
+    "theme",
+    "python"
+  ],
+  "custom": {
+    "root": "scripts"
+  },
+  "routines": {
+    "install": "run custom install link",
+    "uninstall": "run custom install unlink",
+    "check": "run custom dev check",
+    "test": "run custom dev test",
+    "herdr_init": "run herdr init theme --all",
+    "herdr_attach": "run herdr attach theme",
+    "herdr_terminate": "run herdr terminate theme"
+  },
+  "herdr": {
+    "workspaces": [
+      {
+        "label": "theme",
+        "tabs": [
+          {
+            "label": "dev",
+            "layout": "compact",
+            "compact": {
+              "type": "main-side",
+              "panes": [
+                {
+                  "name": "editor",
+                  "size": "70%",
+                  "description": "source under app/theme - TUI, colour maths, target writers"
+                },
+                {
+                  "name": "execution-shell",
+                  "focus": true,
+                  "description": "ad-hoc commands: theme contrast, theme doctor, run routine check"
+                },
+                {
+                  "name": "watch",
+                  "description": "long-running checks - re-run `run routine test` after palette changes"
+                }
+              ]
+            }
+          },
+          {
+            "label": "preview",
+            "layout": "compact",
+            "compact": {
+              "type": "single",
+              "panes": [
+                {
+                  "name": "preview",
+                  "description": "dedicated pane for launching the TUI and eyeballing themes at full size"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

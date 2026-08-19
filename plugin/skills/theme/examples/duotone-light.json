@@ -1,0 +1,14 @@
+{
+  "mode": "light",
+  "bg": "#faf6ed",
+  "bg1": "#efe8d8",
+  "bg2": "#ddd2bb",
+  "fg": "#26211a",
+  "dim": "#5f574a",
+  "a1": "#1f5f4a",
+  "a2": "#7a3a12",
+  "a3": "#31508f",
+  "warn": "#6a5000",
+  "err": "#992222",
+  "about": "warm white, high-contrast ink"
+}

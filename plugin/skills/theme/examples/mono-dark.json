@@ -1,0 +1,14 @@
+{
+  "mode": "dark",
+  "bg": "#071206",
+  "bg1": "#0e2410",
+  "bg2": "#1a3d1c",
+  "fg": "#9ff29f",
+  "dim": "#4e8a52",
+  "a1": "#6ee06e",
+  "a2": "#b7ffb7",
+  "a3": "#3fbf50",
+  "warn": "#d8ff6b",
+  "err": "#ff6b6b",
+  "about": "P1 green CRT phosphor"
+}
