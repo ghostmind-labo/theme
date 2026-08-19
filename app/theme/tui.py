@@ -54,6 +54,7 @@ class Browser:
         self.custom = custom
         self.overrides = overrides
         self.filter_mode: str | None = None
+        self.origin: str | None = None  # "preset" | "custom" | None
         self.query = ""
         self.searching = False
         self.index = 0
@@ -68,12 +69,31 @@ class Browser:
     def visible(self) -> list[str]:
         keys = []
         for key, value in self.themes.items():
+            if self.origin == "preset" and key in self.custom:
+                continue
+            if self.origin == "custom" and key not in self.custom:
+                continue
             if self.filter_mode and value[3] != self.filter_mode:
                 continue
             if self.query and self.query.lower() not in key.lower():
                 continue
             keys.append(key)
-        return keys
+        # Presets first, then the user's own themes - two sections, not a mix.
+        return ([k for k in keys if k not in self.custom]
+                + [k for k in keys if k in self.custom])
+
+    def rows(self) -> list[tuple[str, str]]:
+        """Display rows: ("header", label) and ("theme", key) entries."""
+        keys = self.visible()
+        rows: list[tuple[str, str]] = []
+        for label, group in (
+            ("preset", [k for k in keys if k not in self.custom]),
+            ("custom", [k for k in keys if k in self.custom]),
+        ):
+            if group:
+                rows.append(("header", label))
+                rows.extend(("theme", key) for key in group)
+        return rows
 
     def selected(self) -> str | None:
         keys = self.visible()
@@ -96,36 +116,46 @@ class Browser:
 
         title = " theme "
         counts = f"{len(self.visible())}/{len(self.themes)}"
-        scope = self.filter_mode or "all"
+        scope = " · ".join(part for part in (self.origin, self.filter_mode) if part) or "all"
         head = f"{BOLD}{title}{RESET}{DIM} {scope} · {counts}{RESET}"
         out.append(_at(1, 2) + head)
 
         if self.searching or self.query:
             out.append(_at(2, 2) + f"{DIM}search{RESET} {self.query}" + ("_" if self.searching else ""))
 
-        keys = self.visible()
-        if self.index < self.offset:
-            self.offset = self.index
-        if self.index >= self.offset + body_rows:
-            self.offset = self.index - body_rows + 1
-        window = keys[self.offset:self.offset + body_rows]
+        rows_list = self.rows()
+        selected = self.selected()
+        sel_row = next(
+            (i for i, (kind, val) in enumerate(rows_list) if kind == "theme" and val == selected), 0
+        )
+        if sel_row < self.offset:
+            self.offset = sel_row
+        if sel_row >= self.offset + body_rows:
+            self.offset = sel_row - body_rows + 1
+        # Keep a section header visible when the selection sits right under it.
+        if sel_row and rows_list[sel_row - 1][0] == "header" and self.offset == sel_row:
+            self.offset -= 1
+        window = rows_list[self.offset:self.offset + body_rows]
 
-        for row, key in enumerate(window):
+        for row, (kind, value) in enumerate(window):
             line_no = row + 3
+            if kind == "header":
+                out.append(_at(line_no, 2) + f"{DIM}{BOLD}{value}{RESET}")
+                continue
+            key = value
             mode = self.themes[key][3]
             marker = "●" if key == self.current else " "
-            label = f"{marker} {key:<{LIST_WIDTH - 10}} {DIM}{mode}{RESET}"
-            if self.offset + row == self.index:
+            if key == selected:
                 out.append(_at(line_no, 2) + REVERSE + f" {marker} {key:<{LIST_WIDTH - 10}} {mode:<5} " + RESET)
             else:
-                out.append(_at(line_no, 2) + label)
+                out.append(_at(line_no, 2) + f"{marker} {key:<{LIST_WIDTH - 10}} {DIM}{mode}{RESET}")
 
         out.extend(self._preview(LIST_WIDTH + 5, 3, cols - LIST_WIDTH - 6))
 
         hint = (
             f"{DIM}↑↓{RESET} move  {DIM}⏎{RESET} apply  {DIM}/{RESET} search  "
-            f"{DIM}d{RESET}ark  {DIM}l{RESET}ight  {DIM}a{RESET}ll  "
-            f"{DIM}n{RESET} new  {DIM}q{RESET} quit"
+            f"{DIM}d{RESET}ark  {DIM}l{RESET}ight  {DIM}p{RESET}reset  {DIM}c{RESET}ustom  "
+            f"{DIM}a{RESET}ll  {DIM}n{RESET} new  {DIM}q{RESET} quit"
         )
         out.append(_at(rows - 1, 2) + (self.message or hint))
         return "".join(out)
@@ -140,8 +170,14 @@ class Browser:
         row = top
 
         badge = " (current)" if key == self.current else ""
-        out.append(_at(row, col) + f"{BOLD}{key}{RESET}{DIM} {mode}{badge}{RESET}")
-        row += 2
+        origin = " · custom" if key in self.custom else ""
+        out.append(_at(row, col) + f"{BOLD}{key}{RESET}{DIM} {mode}{origin}{badge}{RESET}")
+        row += 1
+        about = self.custom.get(key, {}).get("about", "")
+        if about:
+            out.append(_at(row, col) + f"{DIM}{about}{RESET}")
+            row += 1
+        row += 1
 
         if palette and background and foreground:
             block = _bg(background) + " " * min(width, 46) + RESET
@@ -214,8 +250,12 @@ class Browser:
             self.filter_mode, self.index = "dark", 0
         elif key == "l":
             self.filter_mode, self.index = "light", 0
+        elif key == "p":
+            self.origin, self.index = "preset", 0
+        elif key == "c":
+            self.origin, self.index = "custom", 0
         elif key == "a":
-            self.filter_mode, self.query, self.index = None, "", 0
+            self.filter_mode, self.origin, self.query, self.index = None, None, "", 0
         elif key in ("\r", "\n"):
             chosen = self.selected()
             if chosen:
