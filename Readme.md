@@ -121,7 +121,23 @@ plugin/
     └── examples/*.json               complete specs, ready to pipe in
 ```
 
-Load it with `claude --plugin-dir /Volumes/Projects/labo/theme/plugin`.
+### Installing
+
+The repo root is a marketplace, so the plugin installs the same way as the
+other Ghostmind ones:
+
+```bash
+claude plugin marketplace add /Volumes/Projects/labo/theme
+claude plugin install theme@ghostmind-theme
+```
+
+Or load it without installing, for a single session:
+
+```bash
+claude --plugin-dir /Volumes/Projects/labo/theme/plugin
+```
+
+Both manifests pass `claude plugin validate`.
 
 Themes Claude creates persist the same way any other custom theme does - they
 are written to `~/.config/theme/custom.json`, not held in the conversation.
