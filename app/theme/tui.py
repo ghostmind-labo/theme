@@ -17,6 +17,7 @@ import termios
 import tty
 
 from .audit import audit
+from .catalog import save_favorites
 from .color import rgb
 from .targets import apply, current, palette_of
 
@@ -49,12 +50,15 @@ def _at(row: int, col: int) -> str:
 
 
 class Browser:
-    def __init__(self, themes: dict, custom: dict, overrides: dict):
+    def __init__(self, themes: dict, custom: dict, overrides: dict, favorites=()):
         self.themes = themes
         self.custom = custom
         self.overrides = overrides
+        # Kept unfiltered: a pin for a theme that does not currently resolve is
+        # simply never matched below, but must survive being written back.
+        self.favorites = list(favorites)
         self.filter_mode: str | None = None
-        self.origin: str | None = None  # "preset" | "custom" | None
+        self.origin: str | None = None  # "favorite" | "preset" | "custom" | None
         self.query = ""
         self.searching = False
         self.index = 0
@@ -69,6 +73,8 @@ class Browser:
     def visible(self) -> list[str]:
         keys = []
         for key, value in self.themes.items():
+            if self.origin == "favorite" and key not in self.favorites:
+                continue
             if self.origin == "preset" and key in self.custom:
                 continue
             if self.origin == "custom" and key not in self.custom:
@@ -78,22 +84,47 @@ class Browser:
             if self.query and self.query.lower() not in key.lower():
                 continue
             keys.append(key)
-        # Presets first, then the user's own themes - two sections, not a mix.
-        return ([k for k in keys if k not in self.custom]
-                + [k for k in keys if k in self.custom])
+        # Flattened in the same order the sections render, so the selection
+        # index and the displayed rows cannot disagree.
+        return [key for _label, group in self._sections(keys) for key in group]
+
+    def _sections(self, keys) -> list[tuple[str, list[str]]]:
+        """Group keys into the sections, in display order.
+
+        A favourite is listed once, under `favorites`, rather than repeated in
+        the section it came from - the point of pinning is to lift it out.
+        """
+        pinned = [k for k in self.favorites if k in keys]
+        rest = [k for k in keys if k not in pinned]
+        return [
+            ("favorites", pinned),
+            ("preset", [k for k in rest if k not in self.custom]),
+            ("custom", [k for k in rest if k in self.custom]),
+        ]
 
     def rows(self) -> list[tuple[str, str]]:
         """Display rows: ("header", label) and ("theme", key) entries."""
-        keys = self.visible()
         rows: list[tuple[str, str]] = []
-        for label, group in (
-            ("preset", [k for k in keys if k not in self.custom]),
-            ("custom", [k for k in keys if k in self.custom]),
-        ):
+        for label, group in self._sections(self.visible()):
             if group:
                 rows.append(("header", label))
                 rows.extend(("theme", key) for key in group)
         return rows
+
+    def toggle_favorite(self) -> None:
+        key = self.selected()
+        if not key:
+            return
+        if key in self.favorites:
+            self.favorites.remove(key)
+            self.message = f"unpinned {key}"
+        else:
+            self.favorites.append(key)
+            self.message = f"pinned {key}"
+        save_favorites(self.favorites)
+        # The row moved between sections; follow it so the cursor stays put.
+        keys = self.visible()
+        self.index = keys.index(key) if key in keys else 0
 
     def selected(self) -> str | None:
         keys = self.visible()
@@ -144,7 +175,7 @@ class Browser:
                 continue
             key = value
             mode = self.themes[key][3]
-            marker = "●" if key == self.current else " "
+            marker = "●" if key == self.current else ("★" if key in self.favorites else " ")
             if key == selected:
                 out.append(_at(line_no, 2) + REVERSE + f" {marker} {key:<{LIST_WIDTH - 10}} {mode:<5} " + RESET)
             else:
@@ -154,6 +185,7 @@ class Browser:
 
         hint = (
             f"{DIM}↑↓{RESET} move  {DIM}⏎{RESET} apply  {DIM}/{RESET} search  "
+            f"{DIM}f{RESET} pin  {DIM}F{RESET} pinned  "
             f"{DIM}d{RESET}ark  {DIM}l{RESET}ight  {DIM}p{RESET}reset  {DIM}c{RESET}ustom  "
             f"{DIM}a{RESET}ll  {DIM}n{RESET} new  {DIM}q{RESET} quit"
         )
@@ -171,7 +203,8 @@ class Browser:
 
         badge = " (current)" if key == self.current else ""
         origin = " · custom" if key in self.custom else ""
-        out.append(_at(row, col) + f"{BOLD}{key}{RESET}{DIM} {mode}{origin}{badge}{RESET}")
+        pinned = " · ★" if key in self.favorites else ""
+        out.append(_at(row, col) + f"{BOLD}{key}{RESET}{DIM} {mode}{origin}{pinned}{badge}{RESET}")
         row += 1
         about = self.custom.get(key, {}).get("about", "")
         if about:
@@ -254,6 +287,10 @@ class Browser:
             self.origin, self.index = "preset", 0
         elif key == "c":
             self.origin, self.index = "custom", 0
+        elif key == "f":
+            self.toggle_favorite()
+        elif key == "F":
+            self.origin, self.index = "favorite", 0
         elif key == "a":
             self.filter_mode, self.origin, self.query, self.index = None, None, "", 0
         elif key in ("\r", "\n"):
@@ -299,12 +336,12 @@ def _read_key(fd: int) -> str:
     return seq.decode("utf-8", "ignore")
 
 
-def browse(themes: dict, custom: dict, overrides: dict) -> str | None:
+def browse(themes: dict, custom: dict, overrides: dict, favorites=()) -> str | None:
     """Run the browser. Returns the applied key, "\\0new", or None."""
     if not sys.stdin.isatty():
         raise RuntimeError("the browser needs an interactive terminal")
 
-    browser = Browser(themes, custom, overrides)
+    browser = Browser(themes, custom, overrides, favorites)
     fd = sys.stdin.fileno()
     saved = termios.tcgetattr(fd)
     out = sys.stdout

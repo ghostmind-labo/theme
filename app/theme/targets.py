@@ -113,6 +113,11 @@ def set_herdr(name: str, custom_block: str | None = None) -> None:
 
     text = re.sub(r"(^\[theme\][^\n]*\n)((?:(?!^\[).*\n)*)", replace_name, text, count=1, flags=re.M)
     text = re.sub(r"^\[theme\.custom\]\n(?:(?!^\[).*\n)*", "", text, flags=re.M)
+    # Earlier versions wrote the banner above the [theme.custom] header, where
+    # the strip above could not reach it, so it accumulated three lines per
+    # switch. Clear any that a previous version left behind.
+    text = re.sub(r"^# (?:Generated|Written) by `theme`.*\n(?:^#.*\n)*", "", text, flags=re.M)
+    text = re.sub(r"\n{3,}", "\n\n", text)
     text = text.rstrip("\n") + "\n"
     if custom_block:
         text += "\n" + custom_block

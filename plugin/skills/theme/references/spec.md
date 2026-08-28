@@ -105,6 +105,7 @@ colour close to `bg2`'s lightness will be moved the furthest.
 | Path | Contents |
 |---|---|
 | `~/.config/theme/custom.json` | the specs — the source of truth, and what makes themes persist |
+| `~/.config/theme/favorites.json` | pinned theme keys, in pin order; may name catalog themes too |
 | `~/.config/theme/overrides.json` | internal bookkeeping for corrected catalog themes |
 | `~/.config/ghostty/themes/<name>` | generated, overwritten on regenerate |
 | `~/.config/helix/themes/<name>.toml` | generated, overwritten on regenerate |

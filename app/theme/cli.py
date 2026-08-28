@@ -13,8 +13,10 @@ from .catalog import (
     GHOSTTY_USER_THEMES,
     HELIX_USER_THEMES,
     load_custom,
+    load_favorites,
     resolve,
     save_custom,
+    save_favorites,
     save_overrides,
 )
 from .color import CONTRAST_TARGET, TEXT_SLOTS, swatch
@@ -28,6 +30,7 @@ USAGE = """theme - recolour Ghostty, herdr and Helix in one command
   theme <name>              apply a theme
   theme list                plain list
   theme current             show what is applied
+  theme fav [name]          pin/unpin a theme, or list what is pinned
 
   theme new <name>          create a theme (wizard, or --from / stdin)
       --from '#rrggbb'      derive a whole palette from one colour
@@ -223,12 +226,42 @@ def cmd_revert(target: str, overrides: dict) -> int:
     return 0
 
 
+def cmd_fav(name: str | None, themes: dict) -> int:
+    # `stored` is what gets written back, unfiltered. A pin naming a theme that
+    # does not currently resolve is hidden from the listing but kept on disk -
+    # filtering before saving would let one toggle silently destroy the rest.
+    stored = load_favorites()
+    if not name:
+        visible = [k for k in stored if k in themes]
+        if not visible:
+            print("nothing pinned yet - `theme fav <name>` pins one")
+            return 0
+        active = current(themes)
+        for key in visible:
+            print(f"  {'*' if key == active else ' '} {key}")
+        return 0
+    if name not in themes:
+        print(f"unknown theme: {name}", file=sys.stderr)
+        return 1
+    if name in stored:
+        stored.remove(name)
+        print(f"unpinned {name}")
+    else:
+        stored.append(name)
+        print(f"pinned {name}")
+    save_favorites(stored)
+    return 0
+
+
 def cmd_list(themes: dict) -> int:
     custom = load_custom()
     active = current(themes)
+    favorites = [k for k in load_favorites() if k in themes]
+    rest = [k for k in themes if k not in favorites]
     sections = (
-        ("preset", [k for k in themes if k not in custom]),
-        ("custom", [k for k in themes if k in custom]),
+        ("favorites", favorites),
+        ("preset", [k for k in rest if k not in custom]),
+        ("custom", [k for k in rest if k in custom]),
     )
     for label, keys in sections:
         if not keys:
@@ -291,7 +324,7 @@ def main(argv: list[str] | None = None) -> int:
         from .tui import browse
 
         try:
-            chosen = browse(themes, custom, overrides)
+            chosen = browse(themes, custom, overrides, load_favorites())
         except RuntimeError as error:
             print(error, file=sys.stderr)
             return cmd_list(themes)
@@ -315,6 +348,8 @@ def main(argv: list[str] | None = None) -> int:
     if command == "current":
         print(current(themes))
         return 0
+    if command == "fav":
+        return cmd_fav(rest[0] if rest else None, themes)
     if command == "generate":
         for key, spec in sorted(custom.items()):
             write_theme(key, spec)
@@ -344,6 +379,10 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         del custom[name]
         save_custom(custom)
+        favorites = load_favorites()
+        if name in favorites:
+            favorites.remove(name)
+            save_favorites(favorites)
         for path in (f"{GHOSTTY_USER_THEMES}/{name}", f"{HELIX_USER_THEMES}/{name}.toml"):
             if os.path.exists(path):
                 os.remove(path)
