@@ -52,6 +52,23 @@ theme fix --light         correct the light themes
 theme fix --all           correct everything below the floor
 ```
 
+## Favorites
+
+Themes you pin get their own section at the top of the picker and of
+`theme list`. There is nothing to set up — the section appears with the first
+pin and disappears with the last.
+
+```bash
+theme fav fieldnote       # pin it; run again to unpin
+theme fav                 # what is pinned, in pin order
+```
+
+In the picker, `f` pins or unpins the highlighted theme and `F` narrows the
+list to pinned ones. Presets can be pinned as well as your own themes, and a
+pinned theme is listed once rather than repeated in the section it came from.
+
+Pins live in `~/.config/theme/favorites.json` as a plain list of names.
+
 ## Creating themes
 
 Three ways in, all landing in the same store:

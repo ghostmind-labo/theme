@@ -32,6 +32,7 @@ HELIX_USER_THEMES = f"{HOME}/.config/helix/themes"
 STORE_DIR = f"{HOME}/.config/theme"
 CUSTOM_STORE = f"{STORE_DIR}/custom.json"
 OVERRIDE_STORE = f"{STORE_DIR}/overrides.json"
+FAVORITES_STORE = f"{STORE_DIR}/favorites.json"
 
 # Remediated palettes are written beside the originals under this suffix, so
 # upstream theme files are never modified in place.
@@ -274,6 +275,21 @@ def load_custom() -> dict:
 
 def save_custom(custom: dict) -> None:
     _write_json(CUSTOM_STORE, custom)
+
+
+def load_favorites() -> list:
+    """Theme keys the user has pinned, in the order they pinned them.
+
+    Kept as a plain list rather than folded into the custom store, because a
+    favourite is a view preference and may point at a catalog theme the tool
+    does not own. A key that no longer resolves is dropped on read.
+    """
+    data = _read_json(FAVORITES_STORE, [])
+    return [k for k in data if isinstance(k, str)] if isinstance(data, list) else []
+
+
+def save_favorites(favorites) -> None:
+    _write_json(FAVORITES_STORE, list(favorites))
 
 
 def load_overrides() -> dict:
