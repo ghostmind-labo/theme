@@ -9,19 +9,63 @@ from __future__ import annotations
 import os
 
 from .catalog import GHOSTTY_USER_THEMES, HELIX_USER_THEMES
-from .color import CONTRAST_TARGET, TEXT_SLOTS, remediate, remediate_against
+from .color import CONTRAST_TARGET, TEXT_SLOTS, contrast, remediate, remediate_against, rgb, to_hex
 from .targets import write
+
+
+def _mix(a: str, b: str, t: float) -> str:
+    return to_hex(tuple(x + (y - x) * t for x, y in zip(rgb(a), rgb(b))))
+
+
+def _raised(surface: str, toward: str, ink: str, target: float = CONTRAST_TARGET) -> str:
+    """Blend `surface` as far toward `toward` as `ink` on it still clears `target`."""
+    if contrast(ink, surface) < target:
+        return surface
+    low, high = 0.0, 1.0
+    for _ in range(20):
+        mid = (low + high) / 2
+        low, high = (mid, high) if contrast(ink, _mix(surface, toward, mid)) >= target else (low, mid)
+    return _mix(surface, toward, low)
+
 
 # ANSI slots are kept inside the theme's own hue family so a tinted prompt
 # reads as tinted rather than rainbow. warn/err stay contrasting on purpose -
 # diagnostics have to survive a monochrome palette.
+#
+# The black/white slots (0, 7, 8, 15) are not text-only: programs paint
+# *surfaces* with them, and which ones depends on polarity. Claude Code's ANSI
+# themes are the sharpest case - light draws body text in 0 and the submitted-
+# message bar in 7; dark draws text in 15 and that bar in 8. Filling them the
+# same way for both modes put ink text on an ink bar in a monochrome theme.
 def _slots(spec: dict) -> dict[int, str]:
-    return {
-        0: spec["bg2"],  1: spec["err"], 2: spec["a1"],  3: spec["warn"],
-        4: spec["a3"],   5: spec["a2"],  6: spec["a1"],  7: spec["fg"],
-        8: spec["dim"],  9: spec["err"], 10: spec["a2"], 11: spec["warn"],
-        12: spec["a1"], 13: spec["a2"], 14: spec["a2"], 15: spec["fg"],
+    slots = {
+        1: spec["err"], 2: spec["a1"],  3: spec["warn"], 4: spec["a3"],
+        5: spec["a2"],  6: spec["a1"],  9: spec["err"],  10: spec["a2"],
+        11: spec["warn"], 12: spec["a1"], 13: spec["a2"], 14: spec["a2"],
     }
+    if spec["mode"] == "light":
+        # black = ink, white = the light surfaces a bar or card is drawn on.
+        # The bar is a paler tint of the ground - a lit card with ink on it -
+        # unless the ground is already near white, where only the darker
+        # selection tint can stand apart.
+        bar = _mix(spec["bg"], "#ffffff", 0.45)
+        if contrast(bar, spec["bg"]) < 1.3:
+            # A pale ground leaves no lighter tint to use, and the selection
+            # tint alone can sit almost on the ground. Deepen it toward the ink
+            # while the ink on it still reads at 8:1, so the bar is visible
+            # without costing legibility.
+            bar = _raised(spec["bg2"], spec["fg"], spec["fg"], 8.0)
+        slots.update({0: spec["fg"], 7: bar, 8: spec["dim"], 15: spec["bg1"]})
+    else:
+        # brightBlack is both the message bar and the dim-text colour shells
+        # use, so it is lifted toward `dim` only as far as body text on it
+        # still reads. On a mid-tone ground whose dim is the ink itself, that
+        # lift walks straight back onto the ground; the selection tint stands
+        # apart better there, so keep whichever is more distinct.
+        raised = _raised(spec["bg2"], spec["dim"], spec["fg"])
+        bar = max((raised, spec["bg2"]), key=lambda c: contrast(c, spec["bg"]))
+        slots.update({0: spec["bg2"], 7: spec["fg"], 8: bar, 15: spec["fg"]})
+    return slots
 
 
 def ghostty_theme(spec: dict) -> str:
@@ -32,10 +76,12 @@ def ghostty_theme(spec: dict) -> str:
     surfaces = [background, spec["bg1"], spec["bg2"]]
     darken = spec["mode"] == "light"
     slots = _slots(spec)
+    # Light-mode ink slots carry body and dim text; hold them to the text floor.
+    ink_slots = (0, 8) if darken else ()
     lines = []
     for index in range(16):
         color = slots[index]
-        if index in TEXT_SLOTS:
+        if index in TEXT_SLOTS or index in ink_slots:
             color = remediate_against(color, surfaces, darken=darken)
         lines.append(f"palette = {index}={color}")
     lines += [

@@ -106,8 +106,13 @@ def remediate_against(
     """
     if darken is None:
         darken = luminance(backgrounds[0]) > 0.5
-    worst = min(backgrounds, key=lambda b: contrast(color, b))
-    return remediate(color, worst, target, darken=darken)
+    # The binding surface is the one nearest the direction of travel - the
+    # darkest when darkening, the lightest when lightening - not whichever the
+    # *uncorrected* colour happens to sit closest to. A pale tint starts out
+    # nearest the pale panels, but once darkened it is the base ground that
+    # limits it, and correcting against the panel left it failing there.
+    binding = (min if darken else max)(backgrounds, key=luminance)
+    return remediate(color, binding, target, darken=darken)
 
 
 def swatch(color: str, width: int = 4) -> str:
