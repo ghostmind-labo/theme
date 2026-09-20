@@ -18,6 +18,7 @@ from .catalog import (
     save_custom,
     save_favorites,
     save_overrides,
+    stamp,
 )
 from .color import CONTRAST_TARGET, TEXT_SLOTS, swatch
 from .generate import write_theme
@@ -67,16 +68,19 @@ def _apply_and_report(key: str, themes: dict) -> None:
         worst = min(v for _t, v in check(pal, bg, fg))
         print(f"  sidebar  herdr chrome regenerated, weakest label {worst:.1f}:1")
     if result.get("claude_synced"):
-        print(f"  claude   own theme switched to {result['mode']} to match")
+        print(f"  claude   own theme switched to {result['claude_synced']} to match")
     print()
     print("  herdr    " + ("reloaded" if result["herdr_reloaded"]
                            else "not running - picks it up on next start"))
     print("  helix    applies on next launch (or :config-reload)")
+    if result.get("claude_synced"):
+        print("  claude   new sessions only - in a running one, /theme to fix it live")
     print("  ghostty  press cmd+shift+, to reload  <- required, no CLI reload exists")
 
 
 def _store(name: str, spec: dict, themes: dict) -> int:
     custom = load_custom()
+    spec = stamp(spec, custom.get(name))
     custom[name] = spec
     save_custom(custom)
     write_theme(name, spec)
@@ -254,14 +258,11 @@ def cmd_fav(name: str | None, themes: dict) -> int:
 
 
 def cmd_list(themes: dict) -> int:
-    custom = load_custom()
     active = current(themes)
     favorites = [k for k in load_favorites() if k in themes]
-    rest = [k for k in themes if k not in favorites]
     sections = (
         ("favorites", favorites),
-        ("preset", [k for k in rest if k not in custom]),
-        ("custom", [k for k in rest if k in custom]),
+        ("themes", sorted(k for k in themes if k not in favorites)),
     )
     for label, keys in sections:
         if not keys:
@@ -328,9 +329,6 @@ def main(argv: list[str] | None = None) -> int:
         except RuntimeError as error:
             print(error, file=sys.stderr)
             return cmd_list(themes)
-        if chosen == "\0new":
-            name = input("new theme name: ").strip()
-            return cmd_new(name, [], themes) if name else 0
         if chosen:
             print(f"applied {chosen} - press cmd+shift+, in Ghostty to reload")
         return 0

@@ -54,24 +54,26 @@ theme fix --all           correct everything below the floor
 
 ## Favorites
 
-Themes you pin get their own section at the top of the picker and of
-`theme list`. There is nothing to set up — the section appears with the first
-pin and disappears with the last.
+The picker and `theme list` show two sections: **favorites**, then every other
+theme in one alphabetical **themes** list. Whether a theme shipped with Ghostty
+or was authored here is not something you browse by. There is nothing to set
+up for favorites — the section appears with the first pin and disappears with
+the last.
 
 ```bash
 theme fav fieldnote       # pin it; run again to unpin
 theme fav                 # what is pinned, in pin order
 ```
 
-In the picker, `f` pins or unpins the highlighted theme and `F` narrows the
-list to pinned ones. Presets can be pinned as well as your own themes, and a
-pinned theme is listed once rather than repeated in the section it came from.
+In the picker, `f` pins or unpins the highlighted theme and `p`
+narrows the list to pinned ones. Any theme can be pinned, and a pinned theme is
+listed once rather than repeated in the themes list.
 
 Pins live in `~/.config/theme/favorites.json` as a plain list of names.
 
 ## Creating themes
 
-Three ways in, all landing in the same store:
+Four ways in, all landing in the same store:
 
 ```bash
 theme new sunset --from '#ff6b35'    # derive a palette from one colour
@@ -79,13 +81,29 @@ theme new sunset                     # wizard, previews before writing
 cat spec.json | theme new sunset     # full 11-role spec (how an agent drives it)
 ```
 
+Or press `n` in the picker: the bottom bar asks for a name, a seed colour
+and dark/light, then the cursor lands on the new theme with its preview
+showing.
+
+Every theme carries `created` and `updated` timestamps, written on store, so
+the picker can sort by newest rather than by name alone.
+
+Lowercase letters command, shifted letters search. `V` jumps to `vermilion`
+without a prefix key, while `d`/`l` limit to dark or light, `j`/`k` move,
+`g`/`b` go to the ends, `f` pins, `p` shows pins only, `s` cycles the sort
+(name, created, updated), `a` clears everything, `⏎` applies and `q` quits.
+Names that *start* with the query lead the list; the rest still match below.
+
 A spec is eleven roles - `bg bg1 bg2 fg dim a1 a2 a3 warn err` plus `mode` and
 `about`. Seed derivation spreads a lightness/saturation ramp from a single hue,
 then contrast-corrects, so the seed only has to look right; it does not have to
 be legible.
 
-Custom themes live in `~/.config/theme/custom.json` as **data, not code**, so
-anything added survives an upgrade of the package.
+Authored themes live in `app/theme/themes.json` as **data, not code**, inside
+the repo: every theme you keep is committed and shipped with the tool, and a
+fresh clone has them all (`theme generate` writes their Ghostty and Helix
+files). Pins and correction bookkeeping are per-machine and stay under
+`~/.config/theme/`.
 
 ## Layout
 
@@ -156,5 +174,6 @@ claude --plugin-dir /Volumes/Projects/labo/theme/plugin
 
 Both manifests pass `claude plugin validate`.
 
-Themes Claude creates persist the same way any other custom theme does - they
-are written to `~/.config/theme/custom.json`, not held in the conversation.
+Themes Claude creates persist the same way any other authored theme does - they
+are written to `app/theme/themes.json` in this repo, not held in the
+conversation.

@@ -21,25 +21,40 @@ from .color import (
 )
 
 
-def _shift(color: str, amount: float) -> str:
-    """Move a colour away from itself in lightness, direction set by darkness."""
+def _shift(color: str, amount: float, lighten: bool) -> str:
+    """Move a colour's lightness by `amount`, away from the ink.
+
+    Direction follows the ink rather than the ground's own luminance: on a
+    mid-tone green with white text, deciding by luminance lifted every panel
+    toward the white labels drawn on it. Where there is no room that way (a
+    white ground under dark ink), the shift goes the other way instead.
+    """
     hue, light, sat = to_hls(color)
-    step = amount if luminance(color) < 0.5 else -amount
+    step = amount if lighten else -amount
+    if not 0.0 <= light + step <= 1.0:
+        step = -step
     return from_hls(hue, max(0.0, min(1.0, light + step)), sat)
 
 
 def herdr_custom(palette: dict, background: str, foreground: str) -> str:
     """Build a `[theme.custom]` block whose every text token is legible on
     every surface herdr draws it on."""
-    # Surfaces are derived rather than taken from palette slot 0: on most
-    # themes slot 0 is near-identical to the background, which gives a
-    # selection highlight nothing can be read against.
-    surface0 = _shift(background, 0.06)
-    surface1 = _shift(background, 0.14)
-    surfaces = [background, surface0, surface1]
+    # Surfaces are derived rather than taken from palette slots: on most
+    # themes slot 0 is near-identical to the background, and slot 8 (which
+    # herdr's terminal fallback uses for surface_dim, the selected-row
+    # highlight) is a *text* colour - a dark ink that swallows the dark
+    # labels drawn on top of it. Every surface stays a near-bg tint instead.
+    # Direction follows the ink, not the ground's luminance: a mid-tone ground
+    # like solid orange sits below 0.5 yet carries dark text, and correcting by
+    # luminance would brighten a pale bar-tint slot into an unreadable label.
+    darken = luminance(foreground) < luminance(background)
+    surface0 = _shift(background, 0.06, lighten=darken)
+    surface_dim = _shift(background, 0.10, lighten=darken)
+    surface1 = _shift(background, 0.14, lighten=darken)
+    surfaces = [background, surface0, surface_dim, surface1]
 
     def fix(color: str, target: float = CONTRAST_TARGET) -> str:
-        return remediate_against(color, surfaces, target)
+        return remediate_against(color, surfaces, target, darken=darken)
 
     def slot(index: int, fallback: str) -> str:
         return palette.get(index, fallback)
@@ -53,6 +68,10 @@ def herdr_custom(palette: dict, background: str, foreground: str) -> str:
         "overlay1": fix(slot(12, slot(4, foreground))),
         "surface0": surface0,
         "surface1": surface1,
+        # The selection highlight. Left unset, herdr derives it from slot 8.
+        "surface_dim": surface_dim,
+        # The panel ground itself, pinned so nothing derives it either.
+        "panel_bg": background,
         "accent": fix(slot(3, slot(11, foreground))),
         "blue": fix(slot(4, foreground)),
         "green": fix(slot(2, foreground)),
@@ -83,7 +102,7 @@ def check(palette: dict, background: str, foreground: str) -> list[tuple[str, fl
         line.split(" = ")[0:2] for line in block.splitlines() if " = " in line
     )
     values = {k: v.strip('"') for k, v in values.items()}
-    surfaces = [background, values["surface0"], values["surface1"]]
+    surfaces = [background, values["surface0"], values["surface_dim"], values["surface1"]]
     out = []
     for token in ("text", "subtext0", "overlay0", "overlay1", "accent"):
         worst = min(contrast(values[token], s) for s in surfaces)

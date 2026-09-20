@@ -84,6 +84,17 @@ def set_ghostty(name: str) -> None:
         text = re.sub(r"^theme\s*=.*$", f"theme = {name}", text, count=1, flags=re.M)
     else:
         text += f"\ntheme = {name}\n"
+    if not re.search(r"^minimum-contrast\s*=", text, re.M):
+        # The palette only governs programs that use ANSI slots. TUIs that
+        # emit their own truecolor assume a near-white or near-black ground
+        # and can land unreadable on anything else; this makes Ghostty nudge
+        # any such cell up to at least 3:1. Written once - a hand-tuned value
+        # is left alone.
+        text += (
+            "\n# Added by `theme`: floor for truecolor text the palette cannot"
+            "\n# reach. Tune or delete freely - `theme` only adds it if absent.\n"
+            "minimum-contrast = 3\n"
+        )
     write(GHOSTTY_CONFIG, text)
 
 
@@ -127,27 +138,48 @@ def set_herdr(name: str, custom_block: str | None = None) -> None:
 CLAUDE_SETTINGS = f"{HOME}/.claude/settings.json"
 
 
-def sync_claude_code(mode: str) -> bool:
-    """Match Claude Code's own theme to the terminal's light/dark mode.
+def sync_claude_code(mode: str) -> str | None:
+    """Match Claude Code's own theme to the terminal's light/dark polarity.
 
-    Claude Code picks its syntax colours for one polarity. Under the opposite
-    one its inline code and dim text wash out - which looks like a broken
-    terminal theme but is not one. Returns True if the setting changed.
+    Claude Code renders its syntax colours in truecolor for one polarity and
+    reads the setting once, at session startup. A wrong-polarity value is what
+    makes code blocks wash out on a light terminal - it looks like a broken
+    terminal theme but is not one, and already-running sessions keep the stale
+    polarity until restarted.
+
+    The -ansi variant is the default: it makes Claude Code draw every colour
+    from the terminal's ANSI palette, which this tool has already corrected -
+    its truecolor palettes assume a near-white or near-black ground and wash
+    out on a mid-luminance background (a solid orange, a deep cream). An
+    explicit -daltonized choice is preserved, only the polarity flips; "auto"
+    and a custom: theme are left alone entirely. Returns the value written,
+    or None if nothing changed.
     """
     import json
 
     try:
         with open(CLAUDE_SETTINGS) as handle:
             settings = json.load(handle)
-    except (FileNotFoundError, ValueError):
-        return False
-    if settings.get("theme") == mode:
-        return False
-    settings["theme"] = mode
-    with open(CLAUDE_SETTINGS, "w") as handle:
+    except FileNotFoundError:
+        settings = {}
+    except ValueError:
+        return None  # never rewrite a file that did not parse
+
+    current = settings.get("theme", "dark")  # absent means Claude's default, dark
+    if current == "auto" or current.startswith("custom:"):
+        return None
+    _, dash, variant = current.partition("-")
+    target = f"{mode}-{variant if dash else 'ansi'}"
+    if current == target:
+        return None
+    settings["theme"] = target
+    os.makedirs(os.path.dirname(CLAUDE_SETTINGS), exist_ok=True)
+    tmp = CLAUDE_SETTINGS + ".tmp"
+    with open(tmp, "w") as handle:
         json.dump(settings, handle, indent=2)
         handle.write("\n")
-    return True
+    os.replace(tmp, CLAUDE_SETTINGS)
+    return target
 
 
 def reload_herdr() -> bool:

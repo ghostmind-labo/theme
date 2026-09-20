@@ -104,7 +104,7 @@ colour close to `bg2`'s lightness will be moved the furthest.
 
 | Path | Contents |
 |---|---|
-| `~/.config/theme/custom.json` | the specs — the source of truth, and what makes themes persist |
+| `app/theme/themes.json` (in the repo) | the specs — the source of truth, committed and shipped with the code. Each carries `created` and `updated` ISO timestamps, written by the tool on store; do not hand-set them |
 | `~/.config/theme/favorites.json` | pinned theme keys, in pin order; may name catalog themes too |
 | `~/.config/theme/overrides.json` | internal bookkeeping for corrected catalog themes |
 | `~/.config/ghostty/themes/<name>` | generated, overwritten on regenerate |

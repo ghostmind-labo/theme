@@ -51,15 +51,19 @@ theme fav [name]            # pin/unpin, or list what is pinned
 theme contrast [name]       # WCAG audit
 ```
 
-Themes are listed in three sections — **favorites**, then **preset**, then
-**custom**.
+Themes are listed in two sections — **favorites**, then every other theme in
+one alphabetical **themes** list. Catalog and authored themes are not
+separated.
 
 Run `theme list` before guessing a name. Invoking bare `theme` opens a
 full-screen interactive picker — suggest that when the user wants to browse
 rather than name a specific theme, but do not launch it from a non-interactive
-context. In the picker: `f` pins or unpins the highlighted theme, `F` shows
-only pinned ones, `p`/`c` filter preset/custom, `d`/`l` filter dark/light and
-`a` clears every filter.
+context. In the picker, lowercase letters command and **shifted letters
+search** — typing `V` filters to `vermilion`, `velvet`, `vesper`. `f` pins or
+unpins the highlighted theme, `p` shows only pinned ones, `d`/`l` filter
+dark/light, `s` cycles the sort (name → created → updated), `a` clears every
+filter, `n` creates a theme from a name, seed colour and mode without leaving
+the picker, `esc` clears the filter and `q` quits.
 
 ## Favorites
 
@@ -77,8 +81,8 @@ theme fav fieldnote         # run again to unpin - the command toggles
 theme fav                   # list what is pinned, current one marked *
 ```
 
-Or from the picker: highlight a theme and press `f` to pin or unpin it, `F` to
-narrow the list to pinned themes only. The pin is written to disk immediately,
+Or from the picker: highlight a theme and press `f` to pin or unpin it,
+`p` to narrow the list to pinned themes only. The pin is written to disk immediately,
 so it survives quitting the picker without applying anything.
 
 What to know when driving this:
@@ -89,7 +93,7 @@ What to know when driving this:
 - **Both catalog and custom themes can be pinned.** A favourite is a view
   preference, not a property of a theme the tool owns.
 - **A pinned theme is listed once**, under favorites, rather than being
-  repeated in the preset or custom section it came from. Pinning lifts it out.
+  repeated in the themes list. Pinning lifts it out.
 - **Order is pin order**, not alphabetical — the most recently pinned theme is
   last. Re-pinning moves a theme to the end.
 - **Pins live in `~/.config/theme/favorites.json`** as a plain list of names.
@@ -197,8 +201,10 @@ and pipe it back through `theme new <name>` — that overwrites in place.
 - **Never hand-edit files in `~/.config/ghostty/themes/` or
   `~/.config/helix/themes/`.** They are generated and overwritten. Edit the
   spec and regenerate.
-- **The store is the source of truth.** Custom themes live in
-  `~/.config/theme/custom.json`. That is what makes them persist.
+- **The store is the source of truth, and it is in the repo.** Authored themes
+  live in `app/theme/themes.json` inside the theme repo, so they are committed
+  and shipped with the code. Creating or removing a theme changes a tracked
+  file — mention that the change needs committing to be kept.
 - **Names are lowercase letters, digits and dashes.** A name that collides with
   a catalog theme is rejected; pick another rather than forcing it.
 - **Custom themes always set herdr to `terminal`**, so herdr inherits Ghostty's
