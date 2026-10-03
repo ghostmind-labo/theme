@@ -18,10 +18,10 @@ import termios
 import tty
 
 from .audit import audit
-from .catalog import load_custom, save_custom, save_favorites, stamp
+from .catalog import load_custom, save_archive, save_custom, save_favorites, stamp
 from .color import rgb
 from .generate import write_theme
-from .palette import derive
+from .palette import derive, is_monochrome
 from .targets import apply, current, palette_of
 
 # The in-picker `n` flow asks these in order, one bottom-bar line at a time.
@@ -137,16 +137,17 @@ def _window(key: str, mode: str, palette: dict, background: str, foreground: str
 
 
 class Browser:
-    def __init__(self, themes: dict, custom: dict, overrides: dict, favorites=()):
+    def __init__(self, themes: dict, custom: dict, overrides: dict, favorites=(), archived=()):
         self.themes = themes
         self.custom = custom
         self.overrides = overrides
         # Kept unfiltered: a pin for a theme that does not currently resolve is
         # simply never matched below, but must survive being written back.
         self.favorites = list(favorites)
+        self.archived = list(archived)
         self.filter_mode: str | None = None
         self.sort = SORTS[0]
-        self.origin: str | None = None  # "favorite" | None
+        self.origin: str | None = None  # "favorite" | "archived" | "monochrome" | None
         self.query = ""
         # Answers so far while creating a theme from `n`; None when not creating.
         self.creating: list[str] | None = None
@@ -169,7 +170,14 @@ class Browser:
     def visible(self) -> list[str]:
         keys = []
         for key, value in self.themes.items():
+            # Archived themes are hidden everywhere except their own scope, so
+            # `p` and the mode filters narrow what is on show rather than
+            # dragging the archive back into view.
+            if (key in self.archived) != (self.origin == "archived"):
+                continue
             if self.origin == "favorite" and key not in self.favorites:
+                continue
+            if self.origin == "monochrome" and not is_monochrome(self.custom.get(key, {})):
                 continue
             if self.filter_mode and value[3] != self.filter_mode:
                 continue
@@ -188,7 +196,10 @@ class Browser:
         alphabetical pool: whether a theme shipped with Ghostty or was authored
         here is provenance, not something to browse by.
         """
-        pinned = [k for k in self.favorites if k in keys]
+        # Inside a single-section scope there is nothing to lift out - the whole
+        # list is already that one thing - but sorting and search still apply.
+        scoped = self.origin in ("archived", "monochrome")
+        pinned = [] if scoped else [k for k in self.favorites if k in keys]
         rest = sorted(k for k in keys if k not in pinned)
         if self.sort != "name":
             # Newest first, and a theme the tool does not own has no date at
@@ -200,7 +211,13 @@ class Browser:
             # with the query lead; the rest still match, listed after.
             starts = [k for k in rest if k.startswith(self.query.lower())]
             rest = starts + [k for k in rest if k not in starts]
-        return [("favorites", pinned), ("themes", rest)]
+        if scoped:
+            return [("favorites", pinned), (self.origin, rest)]
+        # Monochrome is how this collection is browsed, so it gets lifted out of
+        # the pool the way favourites are - and a pin still wins over it.
+        mono = [k for k in rest if is_monochrome(self.custom.get(k, {}))]
+        return [("favorites", pinned), ("monochrome", mono),
+                ("themes", [k for k in rest if k not in mono])]
 
     def rows(self) -> list[tuple[str, str]]:
         """Display rows: ("header", label) and ("theme", key) entries."""
@@ -225,6 +242,26 @@ class Browser:
         # The row moved between sections; follow it so the cursor stays put.
         keys = self.visible()
         self.index = keys.index(key) if key in keys else 0
+
+    def toggle_archived(self) -> None:
+        key = self.selected()
+        if not key:
+            return
+        if key in self.archived:
+            self.archived.remove(key)
+            self.message = f"restored {key}"
+        elif key == self.current:
+            self.message = "cannot archive the applied theme"
+            return
+        else:
+            self.archived.append(key)
+            if key in self.favorites:
+                self.favorites.remove(key)
+                save_favorites(self.favorites)
+            self.message = f"archived {key}"
+        save_archive(self.archived)
+        # The row just left the list it was in; land on its neighbour.
+        self.index = min(self.index, max(0, len(self.visible()) - 1))
 
     def selected(self) -> str | None:
         keys = self.visible()
@@ -310,13 +347,27 @@ class Browser:
             out.append(_at(rows, 1) + BOLD + status[:cols] + RESET)
         else:
             keys = (("A-Z", "SEARCH"), ("jk", "SCAN"), ("gb", "ENDS"), ("⏎", "ENGAGE"), ("f", "PIN"),
-                    ("p", "PINNED"), ("d", "DARK"), ("l", "LIGHT"), ("s", "SORT"), ("a", "ALL"),
+                    ("p", "PINNED"), ("m", "MONO"), ("x", "ARCHIVE"), ("v", "VAULT"),
+                    ("d", "DARK"), ("l", "LIGHT"), ("s", "SORT"), ("a", "ALL"),
                     ("n", "NEW"), ("q", "ABORT"))
-            out.append(_at(rows, 2) + " ".join(f"{REVERSE}{k}{RESET}{DIM}{v}{RESET}" for k, v in keys))
+            # Hints are dropped rather than wrapped: a wrapped bar pushes the
+            # frame off the bottom of the screen on a narrow terminal.
+            hints, room = [], cols - 3
+            for k, v in keys:
+                if len(k) + len(v) + 1 > room:
+                    break
+                hints.append(f"{REVERSE}{k}{RESET}{DIM}{v}{RESET}")
+                room -= len(k) + len(v) + 1
+            out.append(_at(rows, 2) + " ".join(hints))
         return "".join(out)
 
     def _section_of(self, key: str) -> str:
-        return "favorites" if key in self.favorites else "themes"
+        """Which section header a row sits under - read from the sections
+        themselves, so a count can never disagree with the display."""
+        for label, group in self._sections(self.visible()):
+            if key in group:
+                return label
+        return "themes"
 
     def _preview(self, top: int, left: int, width: int, height: int) -> list[str]:
         key = self.selected()
@@ -410,6 +461,12 @@ class Browser:
             self.toggle_favorite()
         elif key == "p":
             self.origin, self.index = "favorite", 0
+        elif key == "v":
+            self.origin, self.index = (None if self.origin == "archived" else "archived"), 0
+        elif key == "m":
+            self.origin, self.index = (None if self.origin == "monochrome" else "monochrome"), 0
+        elif key == "x":
+            self.toggle_archived()
         elif key == "a":
             self.filter_mode, self.origin, self.query, self.index = None, None, "", 0
         elif key == "n":
@@ -513,12 +570,12 @@ def _read_key(fd: int) -> str:
     return seq.decode("utf-8", "ignore")
 
 
-def browse(themes: dict, custom: dict, overrides: dict, favorites=()) -> str | None:
+def browse(themes: dict, custom: dict, overrides: dict, favorites=(), archived=()) -> str | None:
     """Run the browser. Returns the applied key, or None."""
     if not sys.stdin.isatty():
         raise RuntimeError("the browser needs an interactive terminal")
 
-    browser = Browser(themes, custom, overrides, favorites)
+    browser = Browser(themes, custom, overrides, favorites, archived)
     fd = sys.stdin.fileno()
     saved = termios.tcgetattr(fd)
     out = sys.stdout

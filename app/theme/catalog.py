@@ -5,8 +5,8 @@ Two kinds of theme live here:
 * **catalog** - names that already exist in Ghostty's and Helix's own theme
   sets. We only map the three spellings of the same palette.
 * **custom** - palettes this tool generates itself, authored as an 11-role
-  spec. These live in `themes.json` beside this file - data, not code, but
-  inside the repo, so every theme kept is committed and shipped with it.
+  spec. A bundled set ships in `themes.json` beside this file; themes the user
+  authors are kept in `~/.config/theme/themes.json`.
 
 herdr only ships ~17 named themes. Anything it does not know is set to
 "terminal", which makes it inherit Ghostty's palette - that is what lets the
@@ -29,12 +29,18 @@ GHOSTTY_SYSTEM_THEMES = "/Applications/Ghostty.app/Contents/Resources/ghostty/th
 GHOSTTY_USER_THEMES = f"{HOME}/.config/ghostty/themes"
 HELIX_USER_THEMES = f"{HOME}/.config/helix/themes"
 
-# Authored themes ship with the package. Per-machine state - pins and which
-# catalog themes were corrected - stays under ~/.config.
-CUSTOM_STORE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "themes.json")
+# Per-machine state - authored themes, pins, and which catalog themes were
+# corrected - lives under ~/.config.
 STORE_DIR = f"{HOME}/.config/theme"
+BUNDLED_STORE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "themes.json")
+# Authored themes are written to the user's store, never into the package: an
+# installed package is read-only territory and is replaced on upgrade. Set
+# THEME_STORE to point it elsewhere - e.g. at BUNDLED_STORE when developing the
+# bundled set from a checkout.
+CUSTOM_STORE = os.environ.get("THEME_STORE") or f"{STORE_DIR}/themes.json"
 OVERRIDE_STORE = f"{STORE_DIR}/overrides.json"
 FAVORITES_STORE = f"{STORE_DIR}/favorites.json"
+ARCHIVE_STORE = f"{STORE_DIR}/archive.json"
 
 # Remediated palettes are written beside the originals under this suffix, so
 # upstream theme files are never modified in place.
@@ -95,8 +101,15 @@ def _write_json(path, data):
 
 
 def load_custom() -> dict:
-    """Authored palettes, from the package's own `themes.json`."""
-    return _read_json(CUSTOM_STORE, {})
+    """Authored palettes: the user's store, seeded from the bundled set.
+
+    Until the user's store exists the bundled themes are what they get. The
+    first save writes the whole set out, after which the store is theirs alone,
+    so deleting a bundled theme sticks.
+    """
+    if os.path.exists(CUSTOM_STORE):
+        return _read_json(CUSTOM_STORE, {})
+    return _read_json(BUNDLED_STORE, {})
 
 
 def save_custom(custom: dict) -> None:
@@ -132,6 +145,23 @@ def load_favorites() -> list:
 
 def save_favorites(favorites) -> None:
     _write_json(FAVORITES_STORE, list(favorites))
+
+
+def load_archive() -> list:
+    """Theme keys the user has archived: kept, but out of sight.
+
+    Same shape and the same reasoning as favourites - a view preference rather
+    than a property of the palette, so it may name a catalog theme and stays
+    per-machine. Archiving deliberately touches nothing else: the spec stays in
+    the store and the generated files stay on disk, so restoring is instant and
+    an archived theme still applies if it is named outright.
+    """
+    data = _read_json(ARCHIVE_STORE, [])
+    return [k for k in data if isinstance(k, str)] if isinstance(data, list) else []
+
+
+def save_archive(archive) -> None:
+    _write_json(ARCHIVE_STORE, list(archive))
 
 
 def load_overrides() -> dict:
