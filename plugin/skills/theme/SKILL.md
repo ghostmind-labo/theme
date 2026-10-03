@@ -48,6 +48,8 @@ theme list                  # every theme, current one marked
 theme current               # what is applied now
 theme <name>                # apply
 theme fav [name]            # pin/unpin, or list what is pinned
+theme archive [name]        # hide a theme, or list what is hidden
+theme unarchive <name>      # bring one back
 theme contrast [name]       # WCAG audit
 ```
 
@@ -63,9 +65,26 @@ search** — typing `V` filters to `vermilion`, `velvet`, `vesper`. `f` pins or
 unpins the highlighted theme, `p` shows only pinned ones, `d`/`l` filter
 dark/light, `s` cycles the sort (name → created → updated), `a` clears every
 filter, `n` creates a theme from a name, seed colour and mode without leaving
-the picker, `esc` clears the filter and `q` quits.
+the picker, `x` archives or restores the highlighted theme, `v` opens the
+archive as its own scope, `esc` clears the filter and `q` quits.
 
 ## Favorites
+
+**Monochrome is computed, never declared.** A theme is monochrome when `fg`,
+`dim`, `a1`, `a2`, `a3`, `warn` and `err` are all the same hex; those themes get
+their own section in the list and the picker (`m` narrows to them). There is no
+flag to set - author the spec that way and it appears. To give a monochrome
+theme "a splash" of a third colour, put that colour in a surface role (`bg1`
+panels or `bg2` selection), never in a text role: text is contrast-corrected and
+a splash used as text is dragged toward the ink until it stops reading as the
+colour chosen.
+
+**Archiving is not deleting.** `theme archive <name>` only hides a theme from
+the list and the picker - the spec, the generated files and the ability to
+apply it by name all survive, and `theme unarchive` is instant. Reach for it
+when the user says there are too many themes. `theme rm` is the destructive
+one, and it only works on authored themes. The applied theme cannot be
+archived; archiving a pinned theme unpins it.
 
 **There is no step to create the favorites section.** It is not configured and
 cannot be created empty — it appears automatically at the top of `theme list`
@@ -201,10 +220,9 @@ and pipe it back through `theme new <name>` — that overwrites in place.
 - **Never hand-edit files in `~/.config/ghostty/themes/` or
   `~/.config/helix/themes/`.** They are generated and overwritten. Edit the
   spec and regenerate.
-- **The store is the source of truth, and it is in the repo.** Authored themes
-  live in `app/theme/themes.json` inside the theme repo, so they are committed
-  and shipped with the code. Creating or removing a theme changes a tracked
-  file — mention that the change needs committing to be kept.
+- **The store is the source of truth.** Authored themes live in
+  `~/.config/theme/themes.json` (or wherever `THEME_STORE` points), seeded from
+  the set bundled with the CLI. It is per-machine; nothing needs committing.
 - **Names are lowercase letters, digits and dashes.** A name that collides with
   a catalog theme is rejected; pick another rather than forcing it.
 - **Custom themes always set herdr to `terminal`**, so herdr inherits Ghostty's

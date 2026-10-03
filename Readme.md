@@ -71,6 +71,42 @@ listed once rather than repeated in the themes list.
 
 Pins live in `~/.config/theme/favorites.json` as a plain list of names.
 
+## Monochrome
+
+A theme is monochrome when one ink carries every text role — `fg`, `dim`, the
+three accents, `warn` and `err` all the same hex, so warnings and errors look
+like ordinary text. Those themes are lifted into their own **monochrome**
+section in `theme list` and the picker, between favorites and the rest, and `m`
+in the picker narrows to them.
+
+Nothing declares it. It is read off the spec, so a theme joins the section the
+moment it is authored that way and can never carry a stale flag. A third colour
+placed in a surface role — the citron selection in `lemon-moon` — does not break
+it, because surfaces were never part of the claim: the splash is a splash
+precisely because the text stays one colour.
+
+## Archiving
+
+A theme you are done with can be put out of sight without being deleted. The
+list and the picker hide archived themes; everything else about them is
+untouched, so restoring is instant and an archived theme still applies if you
+name it outright.
+
+```bash
+theme archive gruvbox     # put it away
+theme archive             # what is archived
+theme unarchive gruvbox   # bring it back
+theme list --all          # list with the archived section shown
+```
+
+In the picker, `x` archives or restores the highlighted theme and `v` opens the
+vault — the archive as its own scope, where `x` puts one back. The applied
+theme cannot be archived, and archiving a pinned theme unpins it: a pin lifts a
+theme up, an archive hides it, and holding both has no coherent display.
+
+Archived names live in `~/.config/theme/archive.json`. Deleting for good is
+still `theme rm <name>`, which also drops the name from the archive.
+
 ## Creating themes
 
 Four ways in, all landing in the same store:
@@ -127,13 +163,24 @@ actually is while the terminal is still on whatever is currently applied.
 ## Install
 
 ```bash
-run routine install      # shim into ~/.local/bin, no venv, no build
+uv tool install "git+https://github.com/ghostmind-labo/theme#subdirectory=app"
+# or: pipx install "git+https://github.com/ghostmind-labo/theme#subdirectory=app"
+theme
+```
+
+Zero third-party dependencies. Themes you author are kept in
+`~/.config/theme/themes.json` (set `THEME_STORE` to use another file); a bundled
+set seeds it on first use.
+
+### Developing
+
+```bash
+run routine install      # shim into ~/.local/bin pointing at app/, no venv
 run routine check        # compile + resolve every theme
 run routine test         # contrast audit
 ```
 
-Zero third-party dependencies, so the shim points straight at `app/` and edits
-take effect immediately.
+The shim points straight at `app/`, so edits take effect immediately.
 
 ## One manual step
 
@@ -158,11 +205,11 @@ plugin/
 
 ### Installing
 
-The repo root is a marketplace, so the plugin installs the same way as the
-other Ghostmind ones:
+The plugin only teaches Claude to drive the `theme` CLI - **install the CLI
+first** (above). The repo root is a marketplace:
 
 ```bash
-claude plugin marketplace add /Volumes/Projects/labo/theme
+claude plugin marketplace add ghostmind-labo/theme
 claude plugin install theme@ghostmind-theme
 ```
 
@@ -175,5 +222,4 @@ claude --plugin-dir /Volumes/Projects/labo/theme/plugin
 Both manifests pass `claude plugin validate`.
 
 Themes Claude creates persist the same way any other authored theme does - they
-are written to `app/theme/themes.json` in this repo, not held in the
-conversation.
+are written to `~/.config/theme/themes.json`, not held in the conversation.

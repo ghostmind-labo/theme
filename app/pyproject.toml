@@ -1,6 +1,6 @@
 [project]
 name = "theme"
-version = "0.1.0"
+version = "0.3.0"
 description = "Recolour Ghostty, herdr and Helix in one command, with WCAG contrast enforcement."
 requires-python = ">=3.9"
 dependencies = []

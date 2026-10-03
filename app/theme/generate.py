@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 
 from .catalog import GHOSTTY_USER_THEMES, HELIX_USER_THEMES
-from .color import CONTRAST_TARGET, TEXT_SLOTS, contrast, remediate, remediate_against, rgb, to_hex
+from .color import CONTRAST_TARGET, TEXT_SLOTS, contrast, pair, remediate, remediate_against, rgb, to_hex
 from .targets import write
 
 
@@ -26,6 +26,38 @@ def _raised(surface: str, toward: str, ink: str, target: float = CONTRAST_TARGET
         mid = (low + high) / 2
         low, high = (mid, high) if contrast(ink, _mix(surface, toward, mid)) >= target else (low, mid)
     return _mix(surface, toward, low)
+
+
+# Claude Code's suggestion list draws the selected row in the accent (12) and
+# every other row in brightBlack (8). If the two inks are close in lightness the
+# selection cannot be found, whatever their hues: a monochrome theme makes them
+# identical, and a pair like green and brown on the same ground only differs in
+# hue. So slot 8 is moved until it is at least `SEPARATION` from slot 12 while
+# still clearing the text floor on every surface - lighter toward the ground or
+# deeper toward black, whichever needs the smaller move. When the ink is so
+# close to the floor that neither reaches it, the widest legal gap wins.
+SEPARATION = 2.5
+_DIM_FLOOR = 4.6
+
+
+def _set_apart(dim: str, ink: str, surfaces: list[str], ground_to: str = "#000000") -> str:
+    def legal(color: str) -> bool:
+        return min(contrast(color, s) for s in surfaces) >= _DIM_FLOOR
+
+    if contrast(dim, ink) >= SEPARATION:
+        return dim
+    candidates = []
+    for toward in (surfaces[0], ground_to):
+        for step in range(0, 51):
+            color = _mix(dim, toward, step / 50)
+            if legal(color):
+                candidates.append((step, contrast(color, ink), color))
+    if not candidates:
+        return dim
+    reaching = [c for c in candidates if c[1] >= SEPARATION]
+    if reaching:
+        return min(reaching, key=lambda c: c[0])[2]
+    return max(candidates, key=lambda c: c[1])[2]
 
 
 # ANSI slots are kept inside the theme's own hue family so a tinted prompt
@@ -55,7 +87,16 @@ def _slots(spec: dict) -> dict[int, str]:
             # while the ink on it still reads at 8:1, so the bar is visible
             # without costing legibility.
             bar = _raised(spec["bg2"], spec["fg"], spec["fg"], 8.0)
-        slots.update({0: spec["fg"], 7: bar, 8: spec["dim"], 15: spec["bg1"]})
+        dim = _set_apart(spec["dim"], spec["a1"], [spec["bg"], spec["bg1"]])
+        if contrast(dim, slots[12]) < SEPARATION:
+            # Slot 8 had no room left. Deepening the accent is always legal
+            # on a light ground, so spend the rest of the gap there.
+            for step in range(1, 41):
+                deeper = _mix(spec["a1"], "#000000", step / 50)
+                slots[12] = deeper
+                if contrast(dim, deeper) >= SEPARATION:
+                    break
+        slots.update({0: spec["fg"], 7: bar, 8: dim, 15: spec["bg1"]})
     else:
         # brightBlack is both the message bar and the dim-text colour shells
         # use, so it is lifted toward `dim` only as far as body text on it
@@ -70,10 +111,19 @@ def _slots(spec: dict) -> dict[int, str]:
 
 def ghostty_theme(spec: dict) -> str:
     background = spec["bg"]
-    # Text is drawn on selections and panels, not only the base background, and
-    # correction direction follows the theme's polarity - a mid-tone selection
-    # tint on a light theme must never flip it toward white.
-    surfaces = [background, spec["bg1"], spec["bg2"]]
+    # Body text is drawn on the ground and on panels, so it is corrected against
+    # both, and the direction follows the theme's polarity - a mid-tone panel on
+    # a light theme must never flip a colour toward white.
+    #
+    # bg2 is deliberately NOT in that set. It is the selection, and both targets
+    # paint selected text with their own paired foreground (below, and
+    # `ui.selection` in Helix), so the selection never relies on the body ink
+    # being legible against it. Including it made the selection the binding
+    # surface whenever it was the most extreme one, which is exactly what a
+    # splash of a third colour is: a bright teal selection on a near-black
+    # ground dragged every ink to pure white to clear 4.5:1 against the splash,
+    # erasing the one ink the theme was authored around.
+    surfaces = [background, spec["bg1"]]
     darken = spec["mode"] == "light"
     slots = _slots(spec)
     # Light-mode ink slots carry body and dim text; hold them to the text floor.
@@ -89,14 +139,19 @@ def ghostty_theme(spec: dict) -> str:
         f"foreground = {remediate_against(spec['fg'], surfaces, 7.0, darken=darken)}",
         f"cursor-color = {remediate(spec['a1'], background, darken=darken)}",
         f"selection-background = {spec['bg2']}",
-        f"selection-foreground = {remediate(spec['fg'], spec['bg2'], darken=darken)}",
+        # Direction is left to the selection surface itself rather than the
+        # theme's polarity: a splash can be brighter than a dark theme's ground
+        # or darker than a light one's, and pairing it the theme's way lightens
+        # an ink that needed darkening - on a near-white teal that bottoms out
+        # at white on white.
+        f"selection-foreground = {pair(spec['fg'], spec['bg2'])}",
     ]
     return "\n".join(lines) + "\n"
 
 
 def helix_theme(spec: dict) -> str:
     background = spec["bg"]
-    surfaces = [background, spec["bg1"], spec["bg2"]]
+    surfaces = [background, spec["bg1"]]  # see ghostty_theme: bg2 is paired, not a text ground
     darken = spec["mode"] == "light"
 
     def fix(color: str, target: float = CONTRAST_TARGET) -> str:
@@ -107,6 +162,7 @@ def helix_theme(spec: dict) -> str:
     a1, a2, a3 = fix(spec["a1"]), fix(spec["a2"]), fix(spec["a3"])
     warn, err = fix(spec["warn"]), fix(spec["err"])
     bg1, bg2 = spec["bg1"], spec["bg2"]
+    sel_ink = pair(spec["fg"], bg2)  # both directions tried; bg2 decides, not the mode
 
     scopes = {
         '"ui.background"': f'{{ bg = "{background}" }}',
@@ -117,8 +173,10 @@ def helix_theme(spec: dict) -> str:
         '"ui.cursor"': f'{{ fg = "{background}", bg = "{a1}" }}',
         '"ui.cursor.primary"': f'{{ fg = "{background}", bg = "{a2}" }}',
         '"ui.cursorline.primary"': f'{{ bg = "{bg1}" }}',
-        '"ui.selection"': f'{{ bg = "{bg2}" }}',
-        '"ui.selection.primary"': f'{{ bg = "{bg2}" }}',
+        # Paired with the selection ground rather than left to the body ink,
+        # which is what lets bg2 hold a colour the ink could never sit on.
+        '"ui.selection"': f'{{ fg = "{sel_ink}", bg = "{bg2}" }}',
+        '"ui.selection.primary"': f'{{ fg = "{sel_ink}", bg = "{bg2}" }}',
         '"ui.statusline"': f'{{ fg = "{fg}", bg = "{bg1}" }}',
         '"ui.statusline.inactive"': f'{{ fg = "{dim}", bg = "{bg1}" }}',
         '"ui.statusline.normal"': f'{{ fg = "{background}", bg = "{a1}" }}',

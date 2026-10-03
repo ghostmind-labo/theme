@@ -115,6 +115,27 @@ def remediate_against(
     return remediate(color, binding, target, darken=darken)
 
 
+def pair(color: str, background: str, target: float = CONTRAST_TARGET) -> str:
+    """Correct `color` for text drawn directly ON `background`, either way.
+
+    `remediate` takes its direction from the background's luminance, which is
+    right for a ground at either extreme and wrong for a mid-tone one. A
+    sodium-orange selection sits just below the midpoint, so lightening is
+    chosen and then runs out of road at white - 2:1 - while darkening would
+    have cleared the floor with room to spare. Here both directions are tried
+    and the one that clears `target` with the smaller lightness move wins; if
+    neither clears it, the more legible of the two does.
+    """
+    if contrast(color, background) >= target:
+        return color
+    light = to_hls(color)[1]
+    candidates = [remediate(color, background, target, darken=d) for d in (True, False)]
+    clearing = [c for c in candidates if contrast(c, background) >= target]
+    if clearing:
+        return min(clearing, key=lambda c: abs(to_hls(c)[1] - light))
+    return max(candidates, key=lambda c: contrast(c, background))
+
+
 def swatch(color: str, width: int = 4) -> str:
     """A truecolor block.
 

@@ -1,7 +1,7 @@
 {
   "id": "SyI71QPDugZ4",
   "name": "theme",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "TUI for switching the terminal stack's colour scheme across Ghostty, herdr and Helix, with WCAG contrast enforcement.",
   "type": "app",
   "tags": [
@@ -30,6 +30,7 @@
         "tabs": [
           {
             "label": "dev",
+            "prefix": false,
             "layout": "compact",
             "compact": {
               "type": "main-side",
@@ -53,6 +54,7 @@
           },
           {
             "label": "preview",
+            "prefix": false,
             "layout": "compact",
             "compact": {
               "type": "single",

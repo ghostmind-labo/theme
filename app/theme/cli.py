@@ -12,9 +12,11 @@ from .catalog import (
     CUSTOM_STORE,
     GHOSTTY_USER_THEMES,
     HELIX_USER_THEMES,
+    load_archive,
     load_custom,
     load_favorites,
     resolve,
+    save_archive,
     save_custom,
     save_favorites,
     save_overrides,
@@ -22,7 +24,7 @@ from .catalog import (
 )
 from .color import CONTRAST_TARGET, TEXT_SLOTS, swatch
 from .generate import write_theme
-from .palette import SPEC_KEYS, derive, validate
+from .palette import SPEC_KEYS, derive, is_monochrome, validate
 from .targets import apply, current
 
 USAGE = """theme - recolour Ghostty, herdr and Helix in one command
@@ -32,6 +34,10 @@ USAGE = """theme - recolour Ghostty, herdr and Helix in one command
   theme list                plain list
   theme current             show what is applied
   theme fav [name]          pin/unpin a theme, or list what is pinned
+
+  theme archive [name]      put a theme out of sight, or list what is archived
+  theme unarchive <name>    bring one back
+      theme list --all      show archived themes alongside the rest
 
   theme new <name>          create a theme (wizard, or --from / stdin)
       --from '#rrggbb'      derive a whole palette from one colour
@@ -257,12 +263,69 @@ def cmd_fav(name: str | None, themes: dict) -> int:
     return 0
 
 
-def cmd_list(themes: dict) -> int:
+def cmd_archive(name: str | None, themes: dict) -> int:
+    archive = load_archive()
+    if not name:
+        visible = [k for k in archive if k in themes]
+        if not visible:
+            print("nothing archived - `theme archive <name>` puts one away")
+            return 0
+        for key in sorted(visible):
+            owned = "" if key in load_custom() else "   (catalog)"
+            print(f"    {key}{owned}")
+        print(f"\n{len(visible)} archived - `theme unarchive <name>` brings one back")
+        return 0
+    if name not in themes:
+        print(f"unknown theme: {name}", file=sys.stderr)
+        return 1
+    if name in archive:
+        print(f"{name} is already archived")
+        return 0
+    # Archiving what is applied would hide the one theme the user is looking at,
+    # and the list would stop explaining what they are seeing.
+    if name == current(themes):
+        print(f"{name} is the applied theme - switch away before archiving it", file=sys.stderr)
+        return 1
+    favorites = load_favorites()
+    if name in favorites:
+        # A pin lifts a theme to the top; an archive hides it. Holding both at
+        # once has no coherent display, so the newer instruction wins.
+        favorites.remove(name)
+        save_favorites(favorites)
+        print(f"unpinned {name} - a pinned theme cannot also be hidden")
+    archive.append(name)
+    save_archive(archive)
+    print(f"archived {name} - `theme unarchive {name}` brings it back")
+    return 0
+
+
+def cmd_unarchive(name: str, themes: dict) -> int:
+    archive = load_archive()
+    if name not in archive:
+        print(f"{name} is not archived", file=sys.stderr)
+        return 1
+    archive.remove(name)
+    save_archive(archive)
+    print(f"restored {name}" + ("" if name in themes else " (no longer resolves to a palette)"))
+    return 0
+
+
+def cmd_list(themes: dict, show_all: bool = False) -> int:
     active = current(themes)
-    favorites = [k for k in load_favorites() if k in themes]
+    custom = load_custom()
+    archive = [k for k in load_archive() if k in themes]
+    favorites = [k for k in load_favorites() if k in themes and k not in archive]
+    pool = [k for k in themes if k not in favorites and k not in archive]
+    # Monochrome is lifted out for the same reason favourites are: it is how
+    # this collection is actually browsed. A pin still wins, so a pinned
+    # monochrome theme is listed once, at the top.
+    mono = sorted(k for k in pool if is_monochrome(custom.get(k, {})))
+    rest = sorted(k for k in pool if k not in mono)
     sections = (
         ("favorites", favorites),
-        ("themes", sorted(k for k in themes if k not in favorites)),
+        ("monochrome", mono),
+        ("themes", rest),
+        ("archived", sorted(archive) if show_all else []),
     )
     for label, keys in sections:
         if not keys:
@@ -277,6 +340,8 @@ def cmd_list(themes: dict) -> int:
                 marker = "*" if key == active else " "
                 print(f"    {marker} {key}")
     print(f"\ncurrent: {active}")
+    if archive and not show_all:
+        print(f"{len(archive)} archived - `theme archive` lists them, `theme list --all` shows them")
     return 0
 
 
@@ -325,7 +390,7 @@ def main(argv: list[str] | None = None) -> int:
         from .tui import browse
 
         try:
-            chosen = browse(themes, custom, overrides, load_favorites())
+            chosen = browse(themes, custom, overrides, load_favorites(), load_archive())
         except RuntimeError as error:
             print(error, file=sys.stderr)
             return cmd_list(themes)
@@ -342,12 +407,16 @@ def main(argv: list[str] | None = None) -> int:
         print(__version__)
         return 0
     if command == "list":
-        return cmd_list(themes)
+        return cmd_list(themes, show_all="--all" in rest)
     if command == "current":
         print(current(themes))
         return 0
     if command == "fav":
         return cmd_fav(rest[0] if rest else None, themes)
+    if command == "archive":
+        return cmd_archive(rest[0] if rest else None, themes)
+    if command == "unarchive" and rest:
+        return cmd_unarchive(rest[0], themes)
     if command == "generate":
         for key, spec in sorted(custom.items()):
             write_theme(key, spec)
@@ -381,6 +450,10 @@ def main(argv: list[str] | None = None) -> int:
         if name in favorites:
             favorites.remove(name)
             save_favorites(favorites)
+        archive = load_archive()
+        if name in archive:
+            archive.remove(name)
+            save_archive(archive)
         for path in (f"{GHOSTTY_USER_THEMES}/{name}", f"{HELIX_USER_THEMES}/{name}.toml"):
             if os.path.exists(path):
                 os.remove(path)

@@ -22,6 +22,24 @@ SPEC_KEYS = (
 
 HEX_KEYS = tuple(k for k in SPEC_KEYS if k not in ("mode", "about"))
 
+# The roles that carry text. Surfaces are bg, bg1 and bg2.
+TEXT_ROLES = ("fg", "dim", "a1", "a2", "a3", "warn", "err")
+
+
+def is_monochrome(spec: dict) -> bool:
+    """True when one ink carries every text role.
+
+    Monochrome is read off the spec rather than stored as a flag: it is a fact
+    about the colours, so it cannot drift out of date, and a theme becomes
+    monochrome the moment it is authored that way. A third colour placed in a
+    surface role - the splash in `lemon-moon` - does not break it, because the
+    surfaces were never part of the claim.
+    """
+    try:
+        return len({spec[role].lower() for role in TEXT_ROLES}) == 1
+    except (KeyError, AttributeError):
+        return False
+
 
 def derive(seed: str, mode: str = "dark", about: str = "") -> dict:
     """Build a full spec from a single seed colour.
