@@ -3,7 +3,7 @@
   "name": "theme",
   "version": "0.3.0",
   "description": "TUI for switching the terminal stack's colour scheme across Ghostty, herdr and Helix, with WCAG contrast enforcement.",
-  "type": "app",
+  "type": "project",
   "tags": [
     "cli",
     "tui",
@@ -11,14 +11,11 @@
     "theme",
     "python"
   ],
-  "custom": {
-    "root": "scripts"
-  },
   "routines": {
-    "install": "run custom install link",
-    "uninstall": "run custom install unlink",
-    "check": "run custom dev check",
-    "test": "run custom dev test",
+    "install": "bash scripts/install.sh link",
+    "uninstall": "bash scripts/install.sh unlink",
+    "check": "bash scripts/dev.sh check",
+    "test": "bash scripts/dev.sh test",
     "herdr_init": "run herdr init theme --all",
     "herdr_attach": "run herdr attach theme",
     "herdr_terminate": "run herdr terminate theme"
